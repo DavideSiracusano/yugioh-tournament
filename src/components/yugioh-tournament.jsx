@@ -1,44 +1,48 @@
 import { useState, useRef, useEffect } from "react";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const AVATARS = ["🐉","⚡","🌀","🔥","🌊","🗡️","🛡️","👁️","🦅","🐍","🌑","⚗️","🎴","🏆","🌌","🐺","🦁","🐲","🦋"];
+const AVATARS = ["🐉", "⚡", "🌀", "🔥", "🌊", "🗡️", "🛡️", "👁️", "🦅", "🐍", "🌑", "⚗️", "🎴", "🏆", "🌌", "🐺", "🦁", "🐲", "🦋"];
 
 const DECK_SUGGESTIONS = [
-  "Blue-Eyes White Dragon","Magnet Fiendsmith","Dark Magician","Eldlich","Tearlaments","Purrely",
-  "Rescue-Ace","Labrynth","Snake-Eye","Fiendsmith","Branded Despia",
-  "Yubel","Vanquish Soul","Melodious","Tenpai Dragon","Ryzeal",
-  "Superheavy Samurai","Centur-Ion","Voiceless Voice","Swordsoul","Floowandereeze",
-  "Runick","Kashtira","Spright","Ishizu Tear","Mathmech",
-  "Chaos Thunder Dragon","HERO","Drytron","Virtual World","Prank-Kids",
-  "Adamancipator","Ancient Warriors","Buster Blader","Crystal Beast","Cubic",
-  "Danger!","Dark World","Dinosaur","Exodia","Gladiator Beast",
-  "Gouki","Infernoid","Invoked","Lunalight","Madolche",
-  "Marincess","Metaphys","Numeron","Orcust","Pendulum Magician",
-  "Plunder Patroll","Salamangreat","Shaddoll","Sky Striker","True Draco",
-  "Witch","World Chalice","Zoodiac","Nekroz","Igknight",
+  "Blue-Eyes White Dragon", "Magnet Fiendsmith", "Dark Magician", "Eldlich", "Tearlaments", "Purrely",
+  "Rescue-Ace", "Labrynth", "Snake-Eye", "Fiendsmith", "Branded Despia",
+  "Yubel", "Vanquish Soul", "Melodious", "Tenpai Dragon", "Ryzeal",
+  "Superheavy Samurai", "Centur-Ion", "Voiceless Voice", "Swordsoul", "Floowandereeze",
+  "Runick", "Kashtira", "Spright", "Ishizu Tear", "Mathmech",
+  "Chaos Thunder Dragon", "HERO", "Drytron", "Virtual World", "Prank-Kids",
+  "Adamancipator", "Ancient Warriors", "Buster Blader", "Crystal Beast", "Cubic",
+  "Danger!", "Dark World", "Dinosaur", "Exodia", "Gladiator Beast",
+  "Gouki", "Infernoid", "Invoked", "Lunalight", "Madolche",
+  "Marincess", "Metaphys", "Numeron", "Orcust", "Pendulum Magician",
+  "Plunder Patroll", "Salamangreat", "Shaddoll", "Sky Striker", "True Draco",
+  "Witch", "World Chalice", "Zoodiac", "Nekroz", "Igknight",
 ];
 
-/** Swiss Tier 1–3: 50 min/round (Tournament Policy v2.5, EU/NA, dal 5 set 2025). */
+/** Swiss Tier 1–3: 50 min/round (Tournament Policy v2.5, EU/NA). */
 const QUICK_ROUND_DURATION_SEC = 50 * 60;
 
 /**
- * Allineato a Konami Tournament Policy v2.5 (stato attuale organizzato play 2026):
- * Top Cut massimo Top 8 per tutti i tier; Swiss 50 min; niente pareggio match (1-1+);
- * fine match = 2 game vinti o persi, altrimenti double loss per entrambi.
+ * Quick Mode: 3 round titolo (come i Locals YGO).
+ * R1: bracket casuale (+3 pt).
+ * R2: Swiss pairing, tutti duellano (+3 pt).
+ * R3: Swiss pairing, tutti duellano (+3 pt).
+ * Dopo R3: chi ha più punti vince. Se pari → spareggi solo tra i leader (+1 pt).
+ * Classifica finale sempre visibile.
  */
+const QUICK_MAX_TITLE_ROUND = 3;
+
 const ROUND_STRUCTURE = {
-  local:    { swiss: 4,  topCut: 8, bo: 3, label: "LOCAL",    icon: "🏠", desc: "4 Swiss + Top 8 • Policy v2.5" },
-  regional: { swiss: 9,  topCut: 8, bo: 3, label: "REGIONAL", icon: "🏟️", desc: "9 Swiss + Top 8 • Policy v2.5" },
-  quick:    { swiss: 0,  topCut: 0, bo: 1, label: "QUICK",    icon: "⚡", desc: "Adatta per serate da Scelsi" },
+  local: { swiss: 4, topCut: 8, bo: 3, label: "LOCAL", icon: "🏠", desc: "4 Swiss + Top 8 • Policy v2.5" },
+  regional: { swiss: 9, topCut: 8, bo: 3, label: "REGIONAL", icon: "🏟️", desc: "9 Swiss + Top 8 • Policy v2.5" },
+  quick: { swiss: 0, topCut: 0, bo: 1, label: "QUICK", icon: "⚡", desc: "Adatta per serate da Scesli" },
 };
 
 /** Quick: massimo round titolo prima della chiusura per punti / spareggio pari. */
-const QUICK_MAX_TITLE_ROUND = 2;
 
-function generateId() { return Math.random().toString(36).slice(2,9); }
+function generateId() { return Math.random().toString(36).slice(2, 9); }
 
 function calcStandings(players) {
-  return [...players].sort((a,b) => {
+  return [...players].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.owp !== a.owp) return b.owp - a.owp;
     return b.gwp - a.gwp;
@@ -53,54 +57,60 @@ function computeTiebreakers(players, matches) {
     const opponents = players.filter(op => opponentIds.includes(op.id));
     const owp = opponents.length
       ? opponents.reduce((s, op) => {
-          const t = op.wins + op.losses;
-          return s + (t ? Math.max(op.wins / t, 1/3) : 1/3);
-        }, 0) / opponents.length
+        const t = op.wins + op.losses;
+        return s + (t ? Math.max(op.wins / t, 1 / 3) : 1 / 3);
+      }, 0) / opponents.length
       : 0;
     const totalGames = p.gameWins + p.gameLosses + p.gameDraws;
-    const gwp = totalGames ? Math.max(p.gameWins / totalGames, 1/3) : 0;
+    const gwp = totalGames ? Math.max(p.gameWins / totalGames, 1 / 3) : 0;
     return { ...p, owp, gwp };
   });
 }
 
 function hasPlayed(p1Id, p2Id, matches) {
-  return matches.some(m => 
-    (m.p1Id === p1Id && m.p2Id === p2Id) || 
+  return matches.some(m =>
+    (m.p1Id === p1Id && m.p2Id === p2Id) ||
     (m.p1Id === p2Id && m.p2Id === p1Id)
   );
 }
 
 function swissPair(players, pastMatches) {
   const sorted = calcStandings(players);
+
+  // 1. Prova a trovare un pairing perfetto senza rematch
+  function backtrack(unpaired, currentPairs) {
+    if (unpaired.length === 0) return currentPairs;
+    if (unpaired.length === 1) return [...currentPairs, { p1Id: unpaired[0].id, p2Id: "BYE" }];
+
+    const p1 = unpaired[0];
+    for (let i = 1; i < unpaired.length; i++) {
+      const p2 = unpaired[i];
+      if (!hasPlayed(p1.id, p2.id, pastMatches)) {
+        const remaining = unpaired.filter((_, idx) => idx !== 0 && idx !== i);
+        const res = backtrack(remaining, [...currentPairs, { p1Id: p1.id, p2Id: p2.id }]);
+        if (res) return res;
+      }
+    }
+    return null; // Impossibile da questo ramo
+  }
+
+  const validPairing = backtrack(sorted, []);
+  if (validPairing) return validPairing;
+
+  // 2. Fallback: greedy
   const paired = new Set();
   const pairs = [];
   for (let i = 0; i < sorted.length; i++) {
     if (paired.has(sorted[i].id)) continue;
     let found = false;
-    
-    // Cerca il primo giocatore non accoppiato con cui non ha ancora giocato
+
     for (let j = i + 1; j < sorted.length; j++) {
-      if (paired.has(sorted[j].id)) continue;
-      if (!hasPlayed(sorted[i].id, sorted[j].id, pastMatches)) {
+      if (!paired.has(sorted[j].id)) {
         pairs.push({ p1Id: sorted[i].id, p2Id: sorted[j].id });
         paired.add(sorted[i].id);
         paired.add(sorted[j].id);
         found = true;
         break;
-      }
-    }
-    
-    // Fallback: se tutti gli avversari ancora disponibili hanno già giocato con lui,
-    // lo accoppiamo col primo disponibile (per evitare di dare BYE)
-    if (!found) {
-      for (let j = i + 1; j < sorted.length; j++) {
-        if (!paired.has(sorted[j].id)) {
-          pairs.push({ p1Id: sorted[i].id, p2Id: sorted[j].id });
-          paired.add(sorted[i].id);
-          paired.add(sorted[j].id);
-          found = true;
-          break;
-        }
       }
     }
 
@@ -118,13 +128,12 @@ function buildQuickBracket(players) {
   for (let i = 0; i < shuffled.length; i += 2) {
     pairs.push({
       p1Id: shuffled[i].id,
-      p2Id: i + 1 < shuffled.length ? shuffled[i+1].id : "BYE",
+      p2Id: i + 1 < shuffled.length ? shuffled[i + 1].id : "BYE",
     });
   }
   return pairs;
 }
 
-/** Duellanti con il massimo punti (solo confronto sui punti, non OWP). */
 function quickTiedForMaxPoints(playersWithTB) {
   if (!playersWithTB.length) return [];
   const maxPts = Math.max(...playersWithTB.map(p => p.points));
@@ -206,10 +215,7 @@ export default function App() {
     if (!quickTimerRunning) return;
     const id = setInterval(() => {
       setQuickTimerSec(s => {
-        if (s <= 1) {
-          setQuickTimerRunning(false);
-          return 0;
-        }
+        if (s <= 1) { setQuickTimerRunning(false); return 0; }
         return s - 1;
       });
     }, 1000);
@@ -286,31 +292,20 @@ export default function App() {
     const isPolicyDoubleLoss = isQuickDoubleLoss || isBo3PolicyDoubleLoss;
 
     if (isPlacementMatch && isBye) {
-      winner = match.p1Id;
-      p1pts = 1;
-    }
-    else if (isPlacementMatch && isQuickDoubleLoss) {
-      winner = null;
-      p1pts = 0;
-      p2pts = 0;
-    }
-    else if (isPlacementMatch && bestOf === 1) {
+      winner = match.p1Id; p1pts = 1;
+    } else if (isPlacementMatch && isQuickDoubleLoss) {
+      winner = null; p1pts = 0; p2pts = 0;
+    } else if (isPlacementMatch && bestOf === 1) {
       if (resultScores.p1Games > resultScores.p2Games) { winner = match.p1Id; p1pts = 1; }
       else if (resultScores.p2Games > resultScores.p1Games) { winner = match.p2Id; p2pts = 1; }
       else { notify("Spareggio: 1–0 o double loss.", "error"); return; }
-    }
-    else if (isBye) { winner = match.p1Id; p1pts = 3; }
-    else if (isQuickDoubleLoss) {
-      winner = null;
-      p1pts = 0;
-      p2pts = 0;
-    }
-    else if (isBo3PolicyDoubleLoss) {
-      winner = null;
-      p1pts = 0;
-      p2pts = 0;
-    }
-    else if (bestOf === 1) {
+    } else if (isBye) {
+      winner = match.p1Id; p1pts = 3;
+    } else if (isQuickDoubleLoss) {
+      winner = null; p1pts = 0; p2pts = 0;
+    } else if (isBo3PolicyDoubleLoss) {
+      winner = null; p1pts = 0; p2pts = 0;
+    } else if (bestOf === 1) {
       if (resultScores.p1Games > resultScores.p2Games) { winner = match.p1Id; p1pts = 3; }
       else if (resultScores.p2Games > resultScores.p1Games) { winner = match.p2Id; p2pts = 3; }
       else { notify("Risultato non valido: vincitore 1–0 o double loss.", "error"); return; }
@@ -321,10 +316,7 @@ export default function App() {
     }
 
     const updatedMatch = {
-      ...match,
-      ...resultScores,
-      completed: true,
-      winner,
+      ...match, ...resultScores, completed: true, winner,
       doubleLoss: !!isPolicyDoubleLoss,
     };
     const placementDL = isPlacementMatch && isQuickDoubleLoss;
@@ -333,7 +325,8 @@ export default function App() {
         const isWin = !isPolicyDoubleLoss && winner === p.id;
         const isLoss = isPolicyDoubleLoss || !!(winner && winner !== p.id);
         const isDraw = !winner && !isBye && !isPolicyDoubleLoss && !placementDL;
-        return { ...p, points: p.points + p1pts,
+        return {
+          ...p, points: p.points + p1pts,
           wins: p.wins + (isWin ? 1 : 0), losses: p.losses + (isLoss ? 1 : 0), draws: p.draws + (isDraw ? 1 : 0),
           gameWins: p.gameWins + (resultScores.p1Games || 0), gameLosses: p.gameLosses + (resultScores.p2Games || 0),
         };
@@ -342,7 +335,8 @@ export default function App() {
         const isWin = !isPolicyDoubleLoss && winner === p.id;
         const isLoss = isPolicyDoubleLoss || !!(winner && winner !== p.id);
         const isDraw = !winner && !isBye && !isPolicyDoubleLoss && !placementDL;
-        return { ...p, points: p.points + p2pts,
+        return {
+          ...p, points: p.points + p2pts,
           wins: p.wins + (isWin ? 1 : 0), losses: p.losses + (isLoss ? 1 : 0), draws: p.draws + (isDraw ? 1 : 0),
           gameWins: p.gameWins + (resultScores.p2Games || 0), gameLosses: p.gameLosses + (resultScores.p1Games || 0),
         };
@@ -368,6 +362,7 @@ export default function App() {
     if (!roundComplete) { notify("Completa tutti i match prima!", "error"); return; }
 
     if (mode === "quick") {
+      // ── Fase spareggio ──
       if (quickPhase === "placement") {
         const plMs = matches.filter(m => m.phase === "quickPlacement" && m.placementBatch === activePlacementBatch);
         if (!plMs.length || !plMs.every(m => m.completed)) {
@@ -414,12 +409,13 @@ export default function App() {
         return;
       }
 
+      // ── Fase titolo ──
       const titleMs = matches.filter(m => m.phase === "quick" && m.round === currentRound);
       if (!titleMs.length || !titleMs.every(m => m.completed)) {
         notify("Completa tutti i match prima!", "error"); return;
       }
-      const winners = titleMs.map(m => m.winner).filter(Boolean);
 
+      // Avanza al prossimo round titolo se non siamo all'ultimo
       if (currentRound < QUICK_MAX_TITLE_ROUND) {
         const next = currentRound + 1;
         const updated = computeTiebreakers(players, matches);
@@ -434,30 +430,24 @@ export default function App() {
         setCurrentRound(next);
         setQuickTimerSec(QUICK_ROUND_DURATION_SEC);
         setQuickTimerRunning(false);
-        notify(`Round titolo ${next}/${QUICK_MAX_TITLE_ROUND}: tutti duellano (anche 0 pt / double loss), pairing Swiss.`, "success");
+        notify(`Round ${next}/${QUICK_MAX_TITLE_ROUND}: accoppiamento Swiss, tutti in campo (+3 pt).`, "success");
         return;
       }
 
-      if (winners.length === 0) {
-        const withTB = computeTiebreakers(players, matches);
-        setPlayers(withTB);
-        setChampion(null);
-        setQuickStandingsOnly(true);
-        setScreen("results");
-        notify("Nessun vincitore nei match dell’ultimo round: classifica finale per punti.", "success");
-        return;
-      }
-
+      // Fine R3: calcola classifica finale
       const withTB = computeTiebreakers(players, matches);
       setPlayers(withTB);
       const tiedTop = quickTiedForMaxPoints(withTB);
+
       if (tiedTop.length === 1) {
         setChampion(tiedTop[0]);
         setQuickStandingsOnly(false);
         setScreen("results");
-        notify("Campione: massimo punti unico dopo 2 round titolo.", "success");
+        notify("Campione: massimo punti unico dopo 3 round.", "success");
         return;
       }
+
+      // Pari sul max punti → spareggi solo tra i leader
       const nextBatch = placementBatchSeq + 1;
       const newPl = prepareQuickPlacementMatches(tiedTop.map(p => p.id), nextBatch);
       if (!newPl.length) {
@@ -485,6 +475,7 @@ export default function App() {
       return;
     }
 
+    // ── Top Cut ──
     if (phase === "topcut") {
       const winners = currentPhaseMatches.map(m => m.winner).filter(Boolean);
       if (winners.length === 1 && currentPhaseMatches.length === 1) {
@@ -496,7 +487,7 @@ export default function App() {
       for (let i = 0; i < winners.length; i += 2) {
         newMs.push({
           id: generateId(), round: next, phase: curPhase,
-          p1Id: winners[i], p2Id: winners[i+1] || "BYE",
+          p1Id: winners[i], p2Id: winners[i + 1] || "BYE",
           p1Games: 0, p2Games: 0, completed: false, winner: null,
         });
       }
@@ -506,6 +497,7 @@ export default function App() {
       return;
     }
 
+    // ── Swiss → Top Cut ──
     if (swissComplete) {
       const withTB = computeTiebreakers(players, matches);
       setPlayers(withTB);
@@ -524,6 +516,7 @@ export default function App() {
       return;
     }
 
+    // ── Swiss round successivo ──
     const next = currentRound + 1;
     const updated = computeTiebreakers(players, matches);
     setPlayers(updated);
@@ -561,7 +554,7 @@ export default function App() {
   const headerLabel = () => {
     if (mode === "quick") {
       if (quickPhase === "placement") return "⚡ QUICK — Spareggi pari punti (solo chi ha il max)";
-      return `⚡ QUICK — Titolo ${currentRound}/${QUICK_MAX_TITLE_ROUND}`;
+      return `⚡ QUICK — Round ${currentRound}/${QUICK_MAX_TITLE_ROUND}`;
     }
     if (phase === "swiss") return `SWISS ROUND ${currentRound}/${totalSwissRounds}`;
     return `🏆 TOP ${topCutSize} — Round ${currentRound}`;
@@ -570,15 +563,10 @@ export default function App() {
   const advBtnLabel = () => {
     if (mode === "quick") {
       if (quickPhase === "placement") return "⚡ DOPO SPAREGGIO (controlla max punti)";
-      const w = currentPhaseMatches.map(m => m.winner).filter(Boolean);
-      if (w.length === 0 && currentPhaseMatches.length > 0) {
-        if (currentRound < QUICK_MAX_TITLE_ROUND) {
-          return `⚡ ROUND TITOLO ${currentRound + 1}/${QUICK_MAX_TITLE_ROUND} (tutti in campo)`;
-        }
-        return "📊 CLASSIFICA FINALE (nessun vincitore)";
+      if (currentRound < QUICK_MAX_TITLE_ROUND) {
+        return `⚡ ROUND ${currentRound + 1}/${QUICK_MAX_TITLE_ROUND} →`;
       }
-      if (currentRound >= QUICK_MAX_TITLE_ROUND) return "🏁 CHIUDI (classifica / spareggio in vetta)";
-      return `⚡ ROUND TITOLO ${currentRound + 1}/${QUICK_MAX_TITLE_ROUND} (tutti in campo)`;
+      return "🏁 CHIUDI E MOSTRA CLASSIFICA FINALE";
     }
     if (phase === "topcut") {
       const w = currentPhaseMatches.map(m => m.winner).filter(Boolean);
@@ -609,7 +597,7 @@ export default function App() {
             </div>
             <p style={S.logoSub}>TOURNAMENT MANAGER</p>
             <p style={S.logoCap}>Swiss System • Top Cut • Eliminazione Diretta</p>
-            <div style={S.modeGrid}>
+            <div className="mode-grid" style={S.modeGrid}>
               {Object.entries(ROUND_STRUCTURE).map(([key, v]) => (
                 <button key={key} onClick={() => setMode(key)}
                   style={{ ...S.modeCard, ...(mode === key ? S.modeCardOn : {}) }}>
@@ -622,7 +610,7 @@ export default function App() {
             </div>
             {mode === "quick" && (
               <div style={S.quickInfo}>
-                ⚡ Round 1: bracket casuale (+3 pt). Round 2: giocano tutti (anche double loss / meno punti), accoppiamento tipo Swiss. Poi classifica finale; campione se un solo max punti, altrimenti spareggi solo in vetta (+1 pt). Barre nel tab classifica.
+                ⚡ <strong>3 round Swiss</strong> (come i Locals YGO) · R1 bracket casuale · R2 e R3 accoppiamento Swiss · +3 pt a vittoria · Chi ha più punti dopo R3 vince · Se pari → spareggi solo tra i leader (+1 pt) · Classifica finale sempre visibile
               </div>
             )}
             <button style={S.bigBtn} onClick={() => setScreen("setup")}>CREA TORNEO ➤</button>
@@ -639,7 +627,7 @@ export default function App() {
             <span style={{ ...S.badge, ...(mode === "quick" ? S.badgeQuick : {}) }}>{cfg.label} • {cfg.desc}</span>
           </header>
 
-          <div style={S.setupGrid}>
+          <div className="setup-grid" style={S.setupGrid}>
             <div style={S.panel}>
               <h3 style={S.panelTitle}>➕ NUOVO DUELLIST</h3>
 
@@ -721,8 +709,8 @@ export default function App() {
                 {players.length >= 4
                   ? <button style={S.bigBtn} onClick={startTournament}>AVVIA TORNEO ▶</button>
                   : players.length > 0
-                  ? <p style={S.warn}>Aggiungi ancora {4 - players.length} giocatore/i</p>
-                  : null}
+                    ? <p style={S.warn}>Aggiungi ancora {4 - players.length} giocatore/i</p>
+                    : null}
               </div>
             </div>
           </div>
@@ -743,6 +731,12 @@ export default function App() {
           {mode !== "quick" && phase === "swiss" && (
             <div style={S.swissInfoBar}>Swiss • 50 min per round • Tournament Policy v2.5 • nessun pareggio match (solo vittoria 2 game o double loss)</div>
           )}
+          {mode === "quick" && (
+            <div style={S.swissInfoBar}>
+              Quick Local · 3 round Swiss · +3 pt a vittoria · chi ha più punti dopo R3 vince · spareggi se pari in vetta
+            </div>
+          )}
+
           <div style={S.tabs}>
             {["matches", "standings"].map(t => (
               <button key={t} style={{ ...S.tab, ...(tab === t ? S.tabOn : {}) }} onClick={() => setTab(t)}>
@@ -758,50 +752,36 @@ export default function App() {
                   <div style={S.quickBanner}>
                     <span>
                       {quickPhase === "placement"
-                        ? "📊 SPAREGGI — Solo chi è pari sul massimo punti (+1 pt) • Ripeti finché un solo leader"
+                        ? "📊 SPAREGGI — Solo chi è pari sul massimo punti (+1 pt) · Ripeti finché un solo leader"
                         : currentRound === 1
-                          ? `⚡ TITOLO R1 — Bracket (+3 pt) • Poi R2: tutti duellano (Swiss)`
-                          : `⚡ TITOLO R2 — Tutti in campo (+3 pt) • Poi classifica / spareggio in vetta`}
+                          ? "⚡ R1 — Bracket casuale (+3 pt)"
+                          : `⚡ R${currentRound}/${QUICK_MAX_TITLE_ROUND} — Swiss pairing, tutti in campo (+3 pt)`}
                     </span>
-                    <span style={{ fontWeight: 700 }}>{quickPhase === "placement" ? "Classifica" : `Titolo R${currentRound}`}</span>
+                    <span style={{ fontWeight: 700 }}>
+                      {quickPhase === "placement" ? "Spareggi" : `Round ${currentRound}/${QUICK_MAX_TITLE_ROUND}`}
+                    </span>
                   </div>
                   {quickPhase === "title" && (
-                  <div style={S.quickTimerRow}>
-                    <span style={S.quickTimerLabel}>TEMPO MATCH (50 min)</span>
-                    <span style={{
-                      ...S.quickTimerClock,
-                      color: quickTimerSec === 0 ? "#ef4444" : quickTimerRunning ? C.orange : C.gold,
-                    }}>
-                      {formatQuickClock(quickTimerSec)}
-                    </span>
-                    <div style={S.quickTimerBtns}>
-                      <button
-                        type="button"
-                        style={{
-                          ...S.quickTimerBtn,
-                          ...(quickTimerRunning ? S.quickTimerBtnOn : {}),
-                          opacity: quickTimerSec === 0 || quickTimerRunning ? 0.45 : 1,
-                          cursor: quickTimerSec === 0 || quickTimerRunning ? "not-allowed" : "pointer",
-                        }}
-                        onClick={() => quickTimerSec > 0 && !quickTimerRunning && setQuickTimerRunning(true)}
-                        disabled={quickTimerSec === 0 || quickTimerRunning}>
-                        AVVIA
-                      </button>
-                      <button
-                        type="button"
-                        style={S.quickTimerBtn}
-                        onClick={() => setQuickTimerRunning(false)}>
-                        STOP
-                      </button>
-                      <button
-                        type="button"
-                        style={S.quickTimerBtn}
-                        onClick={() => { setQuickTimerSec(QUICK_ROUND_DURATION_SEC); setQuickTimerRunning(false); }}>
-                        RESET 50:00
-                      </button>
+                    <div style={S.quickTimerRow}>
+                      <span style={S.quickTimerLabel}>TEMPO MATCH (50 min)</span>
+                      <span style={{
+                        ...S.quickTimerClock,
+                        color: quickTimerSec === 0 ? "#ef4444" : quickTimerRunning ? C.orange : C.gold,
+                      }}>
+                        {formatQuickClock(quickTimerSec)}
+                      </span>
+                      <div style={S.quickTimerBtns}>
+                        <button type="button"
+                          style={{ ...S.quickTimerBtn, ...(quickTimerRunning ? S.quickTimerBtnOn : {}), opacity: quickTimerSec === 0 || quickTimerRunning ? 0.45 : 1, cursor: quickTimerSec === 0 || quickTimerRunning ? "not-allowed" : "pointer" }}
+                          onClick={() => quickTimerSec > 0 && !quickTimerRunning && setQuickTimerRunning(true)}
+                          disabled={quickTimerSec === 0 || quickTimerRunning}>
+                          AVVIA
+                        </button>
+                        <button type="button" style={S.quickTimerBtn} onClick={() => setQuickTimerRunning(false)}>STOP</button>
+                        <button type="button" style={S.quickTimerBtn} onClick={() => { setQuickTimerSec(QUICK_ROUND_DURATION_SEC); setQuickTimerRunning(false); }}>RESET 50:00</button>
+                      </div>
+                      <p style={S.quickTimerHint}>Timer opzionale (Locals: 50 min/round, Policy v2.5).</p>
                     </div>
-                    <p style={S.quickTimerHint}>Timer opzionale sul ritmo del tavolo (negli eventi ufficiali Swiss: 50 min/round, Policy v2.5).</p>
-                  </div>
                   )}
                 </>
               )}
@@ -822,7 +802,7 @@ export default function App() {
             <div style={mode === "quick" ? S.chartTabWrap : undefined}>
               {mode === "quick" && (
                 <>
-                  <h3 style={S.barListTitle}>Classifica totale — punti (barre proporzionali al massimo)</h3>
+                  <h3 style={S.barListTitle}>Classifica — punti (barre proporzionali al massimo)</h3>
                   <StandingsBarList standings={standings} />
                   <h3 style={{ ...S.barListTitle, marginTop: 22 }}>Dettaglio</h3>
                 </>
@@ -841,7 +821,7 @@ export default function App() {
             <h2 style={S.hdrTitle}>🏆 TOP {topCutSize} — Round {currentRound}</h2>
             <span style={S.badge}>ELIMINAZIONE DIRETTA</span>
           </header>
-          <div style={S.topInfoBar}>Best-of-3 • Top Cut senza limite di tempo fisso (Policy v2.5) • stesse regole di fine match dello Swiss</div>
+          <div style={S.topInfoBar}>Best-of-3 • Top Cut senza limite di tempo fisso (Policy v2.5)</div>
           <div style={S.mList}>
             {currentPhaseMatches.map(m => (
               <MatchCard key={m.id} match={m} getPlayer={getPlayer} isTopCut
@@ -881,16 +861,23 @@ export default function App() {
               <>
                 <p style={S.champEyebrow}>⚡ QUICK — BRACKET SENZA VINCITORE UNICO</p>
                 <p style={{ ...S.modalSub, marginBottom: 18, maxWidth: 420, marginLeft: "auto", marginRight: "auto" }}>
-                  Nessun vincitore assegnabile dai match titolo (es. tutti double loss). L’ordine completo è nella classifica per punti e tiebreaker.
+                  Nessun vincitore assegnabile. Classifica finale per punti e tiebreaker.
                 </p>
               </>
             )}
-            <h3 style={{ ...S.panelTitle, marginTop: 24 }}>{mode === "quick" ? "CLASSIFICA PER PUNTI (TUTTI)" : "CLASSIFICA FINALE"}</h3>
+
+            {/* Classifica finale SEMPRE visibile in Quick */}
             {mode === "quick" && (
-              <div style={{ marginBottom: 20, textAlign: "left" }}>
-                <StandingsBarList standings={standings} compact />
-              </div>
+              <>
+                <h3 style={{ ...S.panelTitle, marginTop: 24, marginBottom: 12 }}>CLASSIFICA FINALE</h3>
+                <div style={{ marginBottom: 16, textAlign: "left" }}>
+                  <StandingsBarList standings={standings} compact />
+                </div>
+              </>
             )}
+            <h3 style={{ ...S.panelTitle, marginTop: mode === "quick" ? 8 : 24 }}>
+              {mode === "quick" ? "DETTAGLIO CLASSIFICA" : "CLASSIFICA FINALE"}
+            </h3>
             <StandingsTable standings={standings} compact />
             <button style={{ ...S.bigBtn, marginTop: 24 }} onClick={resetAll}>🔄 NUOVO TORNEO</button>
           </div>
@@ -920,7 +907,7 @@ function MatchCard({ match, getPlayer, onSelect, isTopCut, isQuick, isPlacement 
       onClick={onSelect} className={match.completed ? "" : "mc-hover"}>
       {(isTopCut || isQuick || isPlacement) && (
         <div style={{ ...S.mcBadge, color: accent, background: `${accent}18` }}>
-          {isPlacement ? "📊 SPAREGGIO" : isQuick ? "⚡ TITOLO" : "⚔️ TOP CUT"}
+          {isPlacement ? "📊 SPAREGGIO" : isQuick ? "⚡ QUICK" : "⚔️ TOP CUT"}
         </div>
       )}
       <div style={S.mcInner}>
@@ -931,7 +918,7 @@ function MatchCard({ match, getPlayer, onSelect, isTopCut, isQuick, isPlacement 
               <>
                 <span style={S.scoreText}>{match.p1Games}{!isBye ? ` – ${match.p2Games}` : ""}</span>
                 {!isBye && match.doubleLoss && (
-                  <span style={S.doubleLossTag}>DOUBLE LOSS — fuori titolo</span>
+                  <span style={S.doubleLossTag}>DOUBLE LOSS</span>
                 )}
               </>
             )
@@ -952,9 +939,7 @@ function PSlot({ player, isWinner, games, right, showPoints }) {
     <div style={{ ...S.pSlot, ...(right ? { alignItems: "flex-end", textAlign: "right" } : {}) }}>
       <span style={S.slotAv}>{player.avatar}</span>
       <span style={{ ...S.slotName, ...(isWinner ? { color: "#f0c030" } : {}) }}>{player.name}</span>
-      {showPoints && (
-        <span style={S.slotPts}>{player.points} pt</span>
-      )}
+      {showPoints && <span style={S.slotPts}>{player.points} pt</span>}
       <span style={S.slotDeck}>{player.deck}</span>
       {isWinner && <span style={S.winTag}>VINCITORE ⭐</span>}
     </div>
@@ -970,18 +955,14 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
   const p1 = getPlayer(match.p1Id);
   const p2 = getPlayer(match.p2Id);
 
-  useEffect(() => {
-    setP1G(0);
-    setP2G(0);
-    setPolicyDoubleLoss(false);
-  }, [match.id]);
+  useEffect(() => { setP1G(0); setP2G(0); setPolicyDoubleLoss(false); }, [match.id]);
 
   const bo3NormalValid = (p1G === 2 && p2G <= 1) || (p2G === 2 && p1G <= 1);
   const bo3DoubleLossValid = policyDoubleLoss && p1G < 2 && p2G < 2;
 
   const valid = isQuick
     ? (!policyDoubleLoss && ((p1G === 1 && p2G === 0) || (p1G === 0 && p2G === 1)))
-      || (policyDoubleLoss && p1G === 0 && p2G === 0)
+    || (policyDoubleLoss && p1G === 0 && p2G === 0)
     : bo3NormalValid || bo3DoubleLossValid;
 
   return (
@@ -992,10 +973,10 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
         </h3>
         <p style={S.modalSub}>
           {isPlacementMatch
-            ? "Spareggio tra i duellanti pari sul massimo punti. Vittoria 1–0: +1 pt. Double loss: 0 pt."
+            ? "Spareggio tra i pari in vetta. Vittoria 1–0: +1 pt. Double loss: 0 pt."
             : isQuick
-              ? `R1: bracket. R2: tutti giocano (Swiss). +3 pt a vittoria; double loss 0 pt. Dopo R2: classifica; spareggi solo se pari sul max punti.`
-              : "Best-of-3 • Policy v2.5: match chiuso solo con 2 game vinti (o persi) da un duellista; altrimenti double loss per entrambi"}
+              ? "+3 pt a vittoria. Double loss: 0 pt per entrambi."
+              : "Best-of-3 • Policy v2.5: chiuso solo con 2 game vinti o double loss"}
         </p>
 
         <div style={S.modalPlayers}>
@@ -1016,11 +997,10 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
 
         {(isQuick || isPlacementMatch) ? (
           <div style={S.quickWinPick}>
-            <p style={S.qwLabel}>{isPlacementMatch ? "VITTORIA SPAREGGIO (1–0, +1 pt)" : "VITTORIA MATCH TITOLO (1–0, +3 pt)"}</p>
+            <p style={S.qwLabel}>{isPlacementMatch ? "VITTORIA SPAREGGIO (1–0, +1 pt)" : "VITTORIA MATCH (1–0, +3 pt)"}</p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
               {[{ player: p1, idx: 1 }, { player: p2, idx: 2 }].map(({ player, idx }) => (
-                <button key={idx}
-                  type="button"
+                <button key={idx} type="button"
                   style={{ ...S.winPickBtn, ...((idx === 1 ? p1G : p2G) === 1 && !policyDoubleLoss ? S.winPickOn : {}) }}
                   onClick={() => {
                     setPolicyDoubleLoss(false);
@@ -1032,8 +1012,7 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
                 </button>
               ))}
             </div>
-            <button
-              type="button"
+            <button type="button"
               style={{ ...S.policyDoubleLossBtn, ...(policyDoubleLoss ? S.policyDoubleLossBtnOn : {}) }}
               onClick={() => { setPolicyDoubleLoss(true); setP1G(0); setP2G(0); }}>
               DOUBLE LOSS (0 pt)
@@ -1045,12 +1024,11 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
               <Counter label={`Game vinti ${p1?.name}`} value={p1G} onChange={v => { setPolicyDoubleLoss(false); setP1G(Math.min(2, Math.max(0, v))); }} />
               <Counter label={`Game vinti ${p2?.name}`} value={p2G} onChange={v => { setPolicyDoubleLoss(false); setP2G(Math.min(2, Math.max(0, v))); }} />
             </div>
-            <p style={S.hint}>Risultati validi: 2-0 • 2-1 • 1-2 • 0-2. Niente 1-1 come chiusura match (né ID): usa double loss se il tempo è scaduto senza 2 game.</p>
-            <button
-              type="button"
+            <p style={S.hint}>Risultati validi: 2-0 • 2-1 • 1-2 • 0-2. Usa double loss se il tempo è scaduto senza 2 game.</p>
+            <button type="button"
               style={{ ...S.policyDoubleLossBtn, ...(policyDoubleLoss ? S.policyDoubleLossBtnOn : {}) }}
               onClick={() => setPolicyDoubleLoss(v => !v)}>
-              {policyDoubleLoss ? "Double loss attivo — regola i game sopra (nessuno a 2 vinte)" : "Registra DOUBLE LOSS (fine tempo / match non finito, entrambi 0 pt)"}
+              {policyDoubleLoss ? "Double loss attivo" : "Registra DOUBLE LOSS (fine tempo / match non finito, entrambi 0 pt)"}
             </button>
             {!valid && (p1G + p2G > 0 || policyDoubleLoss) && <p style={S.invalid}>⚠️ Combinazione non valida per Policy v2.5</p>}
           </>
@@ -1060,14 +1038,7 @@ function MatchModal({ match, getPlayer, onSubmit, onClose, bestOf, isPlacementMa
           <button style={S.cancelBtn} onClick={onClose}>ANNULLA</button>
           <button
             style={{ ...S.bigBtn, flex: 1, padding: "12px 0", opacity: valid ? 1 : 0.35, cursor: valid ? "pointer" : "not-allowed" }}
-            onClick={() => {
-              if (!valid) return;
-              onSubmit({
-                p1Games: p1G,
-                p2Games: p2G,
-                ...(policyDoubleLoss ? { doubleLoss: true } : {}),
-              });
-            }}>
+            onClick={() => { if (!valid) return; onSubmit({ p1Games: p1G, p2Games: p2G, ...(policyDoubleLoss ? { doubleLoss: true } : {}) }); }}>
             CONFERMA ✔
           </button>
         </div>
@@ -1166,14 +1137,14 @@ const S = {
   logoDash: { color: "#fff", textShadow: "0 0 20px rgba(255,255,255,0.12)" },
   logoSub: { fontSize: 12, letterSpacing: "0.5em", color: C.accent, margin: "8px 0 3px" },
   logoCap: { color: C.muted, fontSize: 11, margin: "0 0 36px", letterSpacing: "0.04em" },
-  modeGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 },
+  modeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 24 },
   modeCard: { background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 8px", cursor: "pointer", color: C.muted, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, transition: "all 0.2s", position: "relative" },
   modeCardOn: { background: "rgba(240,192,48,0.08)", border: `1px solid ${C.gold}`, color: C.gold },
   modeIcon: { fontSize: 28 },
   modeLabel: { fontSize: 11, fontWeight: 700, letterSpacing: "0.12em" },
   modeDesc: { fontSize: 9, color: C.muted, textAlign: "center", lineHeight: 1.4 },
   modeTick: { position: "absolute", top: 6, right: 8, fontSize: 10, color: C.gold },
-  quickInfo: { background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.28)", borderRadius: 8, padding: "9px 14px", fontSize: 11, color: C.orange, marginBottom: 22, letterSpacing: "0.04em", lineHeight: 1.5 },
+  quickInfo: { background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.28)", borderRadius: 8, padding: "9px 14px", fontSize: 11, color: C.orange, marginBottom: 22, letterSpacing: "0.04em", lineHeight: 1.6 },
   bigBtn: { background: `linear-gradient(135deg, ${C.gold}, ${C.goldD})`, color: "#000", border: "none", borderRadius: 8, padding: "14px 36px", fontSize: 13, fontWeight: 900, letterSpacing: "0.15em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 24px rgba(240,192,48,0.28)", transition: "opacity 0.2s" },
 
   page: { minHeight: "100vh", display: "flex", flexDirection: "column" },
@@ -1318,8 +1289,9 @@ const css = `
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
   input:focus { border-color: rgba(139,92,246,0.5) !important; box-shadow: 0 0 0 2px rgba(139,92,246,0.08) !important; }
   @media (max-width: 600px) {
-    div[style*="setupGrid"] { grid-template-columns: 1fr !important; }
-    div[style*="modeGrid"] { grid-template-columns: 1fr !important; }
-    div[style*="statRow"] { gap: 8px !important; }
+    .setup-grid { grid-template-columns: 1fr !important; }
+    .mode-grid { grid-template-columns: 1fr !important; }
+    .vs-text-hide { display: none; }
+    input { font-size: 16px !important; /* prevent iOS zoom */ }
   }
 `;
